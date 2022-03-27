@@ -1,0 +1,28 @@
+Package: mLPR
+Type: Package
+Title: mLPR method
+Version: 1.0
+Date: 2022-03-26
+Authors@R: 
+    person(given = "Yuting",
+   family = "Ye",
+   role = c("aut", "cre"),
+   email = "yeyt@berkeley.edu",
+   comment = c(ORCID = "YOUR-ORCID-ID"))
+Author: Yuting Ye [aut, cre]   
+Maintainer: Yuting Ye <yeyt@berkeley.edu>
+Description: This package implements the mLPR estimation and HierRank. It also includes some other competing methods.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.2
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Imports: gRain (== 1.3-2), locpol (>= 0.7-0), dplyr (>= 1.0.8), foreach, doParallel
+
+
+

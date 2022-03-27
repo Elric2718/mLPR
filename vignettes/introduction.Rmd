@@ -1,0 +1,141 @@
+---
+title: "introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(mLPR)
+# to install gRain 1.3-2, need to use C++11. Do "Sys.setenv("PKG_CXXFLAGS"="-std=c++11")".
+n_total <- 60000
+n_train <- 50000
+n_test <- 10000
+n_min_cases <- 150
+
+graph_structure <- lapply(c(0, 0, 0, 2, 3, 3, 4, 4, 
+                             4, 6, 6, 7, 7, 8, 8, 9, 
+                             9, 10, 10, 11, 12, 13, 
+                             13, 13, 14), function(x) x)
+n_class <- length(graph_structure)
+
+seed <- 3
+set.seed(seed)
+data <- mLPR::CreateDataForSetting(n = n_total, test_n = n_test, 
+                                   min_cases = n_min_cases, 
+                                   unif_cond = FALSE,
+                                    setting=11,
+                                   seed = seed)
+
+Y_train <- t(data$labels)[seq(n_train), ]
+Y_test <- t(data$labels)[-seq(n_train), ]
+S_train <-  t(data$scores)[seq(n_train), ]
+S_test <-  t(data$scores)[-seq(n_train), ]
+
+labels <- c(t(Y_test))
+n_label <- length(labels)
+
+
+mlpr_result <- mLPR::estimatemLPR(S_train=S_train, 
+                                  S_test=S_test, 
+                                  Y_train=Y_train, 
+                                  X_train = NULL,
+                                  X_test = NULL,
+                                  graph_structure=graph_structure,
+                                  cdensity_method = "empirical",
+                                  pr_s_y = "LPR-",
+                                  pr_y = "hierarchical-", 
+                                  approx_mlpr = "full", #"neighborhood","full"
+                                  num_cores=4,
+                                  saving_name = "")
+rank_result <- mLPR::Sorting(mlpr_result, graph_structure, "HierRank")
+#rank_result <- mLPR::Sorting(mlpr_result, graph_structure, "value")
+
+
+
+
+ordering  <- rank_result$ordering
+# topK based
+result1 <- sapply(c(0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 1), function(prop){
+    top_K <- round(n_label * prop)
+    
+    prec <- cumsum(labels[ordering])/seq(ordering)
+    recall <- cumsum(labels[ordering])/sum(labels)
+    
+    AUC <- sum(diff(recall[seq(top_K)]) * prec[seq(top_K - 1)])
+    
+    
+    return(paste0("(", round(recall[top_K]*100, digits = 1), ", ", round(prec[top_K]*100, digits = 1), ")"))
+})
+names(result1) <- c("(rec,prec)@1%", "(rec,prec)@5%", "(rec,prec)@10%", 
+             "(rec,prec)@20%", "(rec,prec)@30%", "(rec,prec)@50%", "(rec,prec)@100%")
+result1
+
+
+
+
+# ---------------------------------------------- cutoff power ---------------------------------------- #
+val_index <- sample(seq(dim(Y_test)[1]), size = dim(Y_test)[1]/2, replace = FALSE)
+labels_val <- c(t(Y_test[val_index,]))
+labels_test<- c(t(Y_test[-val_index,]))
+scores <- rank_result$values
+
+sorting_method <- "HierRank"
+result2 <- sapply(c(0.01, 0.05, 0.1, 0.2, "f-max"), function(alpha){
+    tscores <- t(scores)
+    rlt_val <-  Sorting(tscores[val_index,], graph_structure, sorting_method)
+    rlt_test <-  Sorting(tscores[-val_index,], graph_structure, sorting_method)
+    
+    output <- try(
+        {if(alpha != "f-max"){
+            alpha <- as.numeric(alpha)
+            # FDP
+            event_val <- which(cumsum(labels_val[rlt_val$ordering])/seq(length(rlt_val$ordering)) >= 1 - alpha)
+            if(length(event_val) > 0){
+                event_val <- max(event_val)
+            }else{
+                event_val <- 1
+            }
+            ref_test <- alpha
+        }else if(alpha == "f-max"){
+            prec_val <- cumsum(labels_val[rlt_val$ordering])/seq(length(rlt_val$ordering))
+            recall_val <- cumsum(labels_val[rlt_val$ordering])/sum(labels_val)
+            event_val <- which.max(2/(1/prec_val + 1/recall_val))
+            
+            prec_test <- cumsum(labels_test[rlt_test$ordering])/seq(length(rlt_test$ordering))
+            recall_test <- cumsum(labels_test[rlt_test$ordering])/sum(labels_test)
+            ref_test <- max(2/(1/prec_test + 1/recall_test))
+        }
+            event_test <- round(event_val * (length(labels_test)/length(labels_val)))
+            
+            if(alpha != "f-max"){
+                output <- 1-sum(labels_test[rlt_test$ordering[seq(event_test)]])/event_test
+            }else{
+                output <- 2/(1/prec_test[event_test] + 1/recall_test[event_test])
+            }
+        }
+    )
+    
+    fdp_test <- 1-sum(labels_test[rlt_test$ordering[seq(event_test)]])/event_test
+    
+    if(class(output) == "try-error"){
+        browser()
+    }
+    #print(event_test)
+    return(paste0("(", round(output, digits = 5), ", ", round(ref_test, digits = 5), ", ", round(event_test/length(labels_test), digits = 5), ", ", round(fdp_test, digits = 5), ")"))
+})
+names(result2) <- c("(fmax,target,cutoff,fdp)@1%","(fmax,target,cutoff,fdp)@5%","(fmax,target,cutoff,fdp)@10%",
+                    "(fmax,target,cutoff,fdp)@20%","(fmax,target,cutoff,fdp)@fmax")
+result2
+
+
+```
