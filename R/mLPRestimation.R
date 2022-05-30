@@ -1,20 +1,12 @@
 #############################################################################################
 ########################################## mLPR ##########################################
 #############################################################################################
-# require(dplyr)
-# require(LPRclass)
-# require(foreach)
-# require(doParallel)
-# require(gRain)
-# require(locpol)
-
-
 eps <- 1e-6
 lower_clip = 0
 upper_clip = 1
 
 
-#' Estimate LPR
+#' Estimate mLPR
 #'
 #' This function estimates the mLPR on a data set.
 #' The user needs to provide two data sets (one to use as training
